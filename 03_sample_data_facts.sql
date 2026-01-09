@@ -207,33 +207,24 @@ SET
 
 INSERT INTO FACT_REVIEW (review_id, order_id, customer_id, location_id, review_date, 
     overall_rating, food_rating, service_rating, delivery_rating, review_text, review_source)
-SELECT 
-    ROW_NUMBER() OVER (ORDER BY o.order_id) AS review_id,
-    o.order_id,
-    o.customer_id,
-    o.location_id,
-    TIMESTAMPADD(HOUR, UNIFORM(1, 48, RANDOM()), o.order_timestamp) AS review_date,
-    overall_rating,
-    food_rating,
-    service_rating,
-    CASE WHEN o.order_type = 'DELIVERY' THEN delivery_rating ELSE NULL END AS delivery_rating,
-    review_text,
-    CASE UNIFORM(1, 10, RANDOM())
-        WHEN 1 THEN 'GOOGLE'
-        WHEN 2 THEN 'GOOGLE'
-        WHEN 3 THEN 'YELP'
-        WHEN 4 THEN 'YELP'
-        WHEN 5 THEN 'DOORDASH'
-        ELSE 'WEBSITE'
-    END AS review_source
-FROM FACT_ORDER o,
-LATERAL (
+
+/* STEP 1: CALCULATE RATINGS
+   We filter the 25% of orders and generate the numeric ratings first. 
+   This ensures the numbers are "frozen" before we generate text based on them.
+*/
+WITH RATED_ORDERS AS (
     SELECT 
+        o.order_id,
+        o.customer_id,
+        o.location_id,
+        o.order_timestamp,
+        o.order_type,
+        -- Generate Ratings
         CASE 
-            WHEN UNIFORM(1, 100, RANDOM()) <= 60 THEN 5  -- 60% 5-star
-            WHEN UNIFORM(1, 100, RANDOM()) <= 85 THEN 4  -- 25% 4-star
-            WHEN UNIFORM(1, 100, RANDOM()) <= 95 THEN 3  -- 10% 3-star
-            ELSE UNIFORM(1, 2, RANDOM())                  -- 5% 1-2 star
+            WHEN UNIFORM(1, 100, RANDOM()) <= 60 THEN 5 
+            WHEN UNIFORM(1, 100, RANDOM()) <= 85 THEN 4 
+            WHEN UNIFORM(1, 100, RANDOM()) <= 95 THEN 3 
+            ELSE UNIFORM(1, 2, RANDOM()) 
         END AS overall_rating,
         CASE 
             WHEN UNIFORM(1, 100, RANDOM()) <= 65 THEN 5
@@ -249,72 +240,96 @@ LATERAL (
             WHEN UNIFORM(1, 100, RANDOM()) <= 50 THEN 5
             WHEN UNIFORM(1, 100, RANDOM()) <= 80 THEN 4
             ELSE UNIFORM(2, 3, RANDOM())
-        END AS delivery_rating
-) ratings,
-LATERAL (
-    SELECT 
-        CASE 
-            WHEN ratings.overall_rating = 5 THEN
-                CASE UNIFORM(1, 15, RANDOM())
-                    WHEN 1 THEN 'Best pizza in Austin! The crust is perfectly crispy and the toppings are always fresh. Highly recommend the Margherita!'
-                    WHEN 2 THEN 'Amazing experience! The staff was super friendly and the food came out quickly. Will definitely be back!'
-                    WHEN 3 THEN 'Our go-to pizza place! Love the BBQ Chicken pizza - the flavors are incredible. Fast delivery too!'
-                    WHEN 4 THEN 'Fantastic pizza and great value. The Supreme is loaded with toppings. Kids loved it!'
-                    WHEN 5 THEN 'Exceeded expectations! Fresh ingredients, authentic Italian taste. The tiramisu is a must-try!'
-                    WHEN 6 THEN 'Perfect every single time. We order at least once a week. The Meat Lovers never disappoints.'
-                    WHEN 7 THEN 'The truffle mushroom pizza is absolutely divine! Such unique flavors you wont find anywhere else.'
-                    WHEN 8 THEN 'Ordered for a party and everyone was impressed. Great portion sizes and reasonable prices.'
-                    WHEN 9 THEN 'Love that they have gluten-free options! Finally a pizza place my whole family can enjoy.'
-                    WHEN 10 THEN 'Consistently delicious. The garlic knots are addictive and the pepperoni pizza is classic perfection.'
-                    WHEN 11 THEN 'My new favorite spot! The white pizza with ricotta is heavenly. Delivery was super fast.'
-                    WHEN 12 THEN 'Authentic Italian pizza right here in Austin. The San Marzano tomatoes make all the difference!'
-                    WHEN 13 THEN 'The vegan options are amazing - you cant even tell its vegan cheese! So grateful for inclusive menu.'
-                    WHEN 14 THEN 'Date night favorite! Great atmosphere, excellent wine selection, and of course incredible pizza.'
-                    ELSE 'Simply the best! Fresh, hot, and delicious every time. The four cheese pizza is out of this world!'
-                END
-            WHEN ratings.overall_rating = 4 THEN
-                CASE UNIFORM(1, 10, RANDOM())
-                    WHEN 1 THEN 'Really good pizza, just wish they had more vegetarian specialty options. Service was great though!'
-                    WHEN 2 THEN 'Tasty food and friendly staff. Delivery took a bit longer than expected but pizza was still hot.'
-                    WHEN 3 THEN 'Great pizza for the price. The crust was a little thicker than I prefer but flavors were on point.'
-                    WHEN 4 THEN 'Good experience overall. Wings were excellent, pizza was good but sauce could use more seasoning.'
-                    WHEN 5 THEN 'Nice place for a casual dinner. Food quality is consistent. Would be 5 stars with faster service.'
-                    WHEN 6 THEN 'Solid pizza joint. The Hawaiian was tasty. Parking can be tricky during busy hours.'
-                    WHEN 7 THEN 'Pretty good! The Caesar salad is fresh and generous. Pizza arrived lukewarm but tasted great.'
-                    WHEN 8 THEN 'Good value for money. Kids menu would be nice addition. The mozzarella sticks were a hit!'
-                    WHEN 9 THEN 'Enjoyed our meal. The Four Cheese pizza was rich and flavorful. Just a bit too salty for my taste.'
-                    ELSE 'Nice neighborhood pizza spot. Food is reliably good. The app for ordering could use some improvements.'
-                END
-            WHEN ratings.overall_rating = 3 THEN
-                CASE UNIFORM(1, 8, RANDOM())
-                    WHEN 1 THEN 'Average pizza experience. Nothing special but nothing bad either. Might try again.'
-                    WHEN 2 THEN 'Food was okay but took forever to arrive. Pizza was cold by the time we got it.'
-                    WHEN 3 THEN 'Decent pizza but overpriced for what you get. Other places nearby offer better value.'
-                    WHEN 4 THEN 'The pizza was fine but the service was slow and inattentive. Expected better.'
-                    WHEN 5 THEN 'Hit or miss. Some visits are great, others are disappointing. Consistency is an issue.'
-                    WHEN 6 THEN 'Toppings were sparse and crust was soggy. Had better experiences here before.'
-                    WHEN 7 THEN 'Not bad but not memorable. The pasta was better than the pizza surprisingly.'
-                    ELSE 'Middle of the road. Nothing wrong but nothing exciting either. Probably wouldnt go out of my way.'
-                END
-            WHEN ratings.overall_rating = 2 THEN
-                CASE UNIFORM(1, 5, RANDOM())
-                    WHEN 1 THEN 'Disappointed with this visit. Pizza was undercooked and the order was wrong. No apology from staff.'
-                    WHEN 2 THEN 'Used to be good but quality has declined. Waited 45 minutes for lukewarm pizza. Wont return soon.'
-                    WHEN 3 THEN 'Very greasy and the cheese was not melted properly. Asked for remake but it was the same.'
-                    WHEN 4 THEN 'Delivery driver was rude and pizza box was crushed. Food was mediocre at best.'
-                    ELSE 'Not what it used to be. Small portions, slow service, and the pizza tasted like it sat under a heat lamp.'
-                END
-            ELSE  -- Rating 1
-                CASE UNIFORM(1, 5, RANDOM())
-                    WHEN 1 THEN 'Terrible experience. Found a hair in my pizza and manager was dismissive. Never again.'
-                    WHEN 2 THEN 'Worst pizza Ive had in Austin. Raw dough in the middle, burnt edges. Complete waste of money.'
-                    WHEN 3 THEN 'Food poisoning after eating here. Reported to health department. Stay away!'
-                    WHEN 4 THEN 'Order was completely wrong, waited over an hour, and the pizza was inedible. Absolutely awful.'
-                    ELSE 'Zero stars if I could. Rude staff, dirty tables, and the food was disgusting. How is this place still open?'
-                END
-        END AS review_text
-) review_content
-WHERE UNIFORM(1, 100, RANDOM()) <= 25;  -- 25% of orders get reviews
+        END AS delivery_rating_raw
+    FROM FACT_ORDER o
+    WHERE UNIFORM(1, 100, RANDOM()) <= 25 -- Filter 25% here for performance
+)
+/* STEP 2: GENERATE METADATA & TEXT
+   Now we map the fixed ratings to text and handle final formatting.
+*/
+SELECT 
+    ROW_NUMBER() OVER (ORDER BY ro.order_id) AS review_id,
+    ro.order_id,
+    ro.customer_id,
+    ro.location_id,
+    TIMESTAMPADD(HOUR, UNIFORM(1, 48, RANDOM()), ro.order_timestamp) AS review_date,
+    ro.overall_rating,
+    ro.food_rating,
+    ro.service_rating,
+    CASE WHEN ro.order_type = 'DELIVERY' THEN ro.delivery_rating_raw ELSE NULL END AS delivery_rating,
+    
+    -- Text Generation (Based on the FIXED overall_rating from CTE)
+    CASE 
+        WHEN ro.overall_rating = 5 THEN 
+            CASE UNIFORM(1, 15, RANDOM())
+                WHEN 1 THEN 'Best pizza in Austin! The crust is perfectly crispy and the toppings are always fresh. Highly recommend the Margherita!'
+                WHEN 2 THEN 'Amazing experience! The staff was super friendly and the food came out quickly. Will definitely be back!'
+                WHEN 3 THEN 'Our go-to pizza place! Love the BBQ Chicken pizza - the flavors are incredible. Fast delivery too!'
+                WHEN 4 THEN 'Fantastic pizza and great value. The Supreme is loaded with toppings. Kids loved it!'
+                WHEN 5 THEN 'Exceeded expectations! Fresh ingredients, authentic Italian taste. The tiramisu is a must-try!'
+                WHEN 6 THEN 'Perfect every single time. We order at least once a week. The Meat Lovers never disappoints.'
+                WHEN 7 THEN 'The truffle mushroom pizza is absolutely divine! Such unique flavors you wont find anywhere else.'
+                WHEN 8 THEN 'Ordered for a party and everyone was impressed. Great portion sizes and reasonable prices.'
+                WHEN 9 THEN 'Love that they have gluten-free options! Finally a pizza place my whole family can enjoy.'
+                WHEN 10 THEN 'Consistently delicious. The garlic knots are addictive and the pepperoni pizza is classic perfection.'
+                WHEN 11 THEN 'My new favorite spot! The white pizza with ricotta is heavenly. Delivery was super fast.'
+                WHEN 12 THEN 'Authentic Italian pizza right here in Austin. The San Marzano tomatoes make all the difference!'
+                WHEN 13 THEN 'The vegan options are amazing - you cant even tell its vegan cheese! So grateful for inclusive menu.'
+                WHEN 14 THEN 'Date night favorite! Great atmosphere, excellent wine selection, and of course incredible pizza.'
+                ELSE 'Simply the best! Fresh, hot, and delicious every time. The four cheese pizza is out of this world!'
+            END
+        WHEN ro.overall_rating = 4 THEN 
+            CASE UNIFORM(1, 10, RANDOM())
+                WHEN 1 THEN 'Really good pizza, just wish they had more vegetarian specialty options. Service was great though!'
+                WHEN 2 THEN 'Tasty food and friendly staff. Delivery took a bit longer than expected but pizza was still hot.'
+                WHEN 3 THEN 'Great pizza for the price. The crust was a little thicker than I prefer but flavors were on point.'
+                WHEN 4 THEN 'Good experience overall. Wings were excellent, pizza was good but sauce could use more seasoning.'
+                WHEN 5 THEN 'Nice place for a casual dinner. Food quality is consistent. Would be 5 stars with faster service.'
+                WHEN 6 THEN 'Solid pizza joint. The Hawaiian was tasty. Parking can be tricky during busy hours.'
+                WHEN 7 THEN 'Pretty good! The Caesar salad is fresh and generous. Pizza arrived lukewarm but tasted great.'
+                WHEN 8 THEN 'Good value for money. Kids menu would be nice addition. The mozzarella sticks were a hit!'
+                WHEN 9 THEN 'Enjoyed our meal. The Four Cheese pizza was rich and flavorful. Just a bit too salty for my taste.'
+                ELSE 'Nice neighborhood pizza spot. Food is reliably good. The app for ordering could use some improvements.'
+            END
+        WHEN ro.overall_rating = 3 THEN 
+            CASE UNIFORM(1, 8, RANDOM())
+                WHEN 1 THEN 'Average pizza experience. Nothing special but nothing bad either. Might try again.'
+                WHEN 2 THEN 'Food was okay but took forever to arrive. Pizza was cold by the time we got it.'
+                WHEN 3 THEN 'Decent pizza but overpriced for what you get. Other places nearby offer better value.'
+                WHEN 4 THEN 'The pizza was fine but the service was slow and inattentive. Expected better.'
+                WHEN 5 THEN 'Hit or miss. Some visits are great, others are disappointing. Consistency is an issue.'
+                WHEN 6 THEN 'Toppings were sparse and crust was soggy. Had better experiences here before.'
+                WHEN 7 THEN 'Not bad but not memorable. The pasta was better than the pizza surprisingly.'
+                ELSE 'Middle of the road. Nothing wrong but nothing exciting either. Probably wouldnt go out of my way.'
+            END
+        WHEN ro.overall_rating = 2 THEN 
+            CASE UNIFORM(1, 5, RANDOM())
+                WHEN 1 THEN 'Disappointed with this visit. Pizza was undercooked and the order was wrong. No apology from staff.'
+                WHEN 2 THEN 'Used to be good but quality has declined. Waited 45 minutes for lukewarm pizza. Wont return soon.'
+                WHEN 3 THEN 'Very greasy and the cheese was not melted properly. Asked for remake but it was the same.'
+                WHEN 4 THEN 'Delivery driver was rude and pizza box was crushed. Food was mediocre at best.'
+                ELSE 'Not what it used to be. Small portions, slow service, and the pizza tasted like it sat under a heat lamp.'
+            END
+        ELSE -- Rating 1
+            CASE UNIFORM(1, 5, RANDOM())
+                WHEN 1 THEN 'Terrible experience. Found a hair in my pizza and manager was dismissive. Never again.'
+                WHEN 2 THEN 'Worst pizza Ive had in Austin. Raw dough in the middle, burnt edges. Complete waste of money.'
+                WHEN 3 THEN 'Food poisoning after eating here. Reported to health department. Stay away!'
+                WHEN 4 THEN 'Order was completely wrong, waited over an hour, and the pizza was inedible. Absolutely awful.'
+                ELSE 'Zero stars if I could. Rude staff, dirty tables, and the food was disgusting. How is this place still open?'
+            END
+    END AS review_text,
+
+    -- Source Generation
+    CASE UNIFORM(1, 10, RANDOM())
+        WHEN 1 THEN 'GOOGLE'
+        WHEN 2 THEN 'GOOGLE'
+        WHEN 3 THEN 'YELP'
+        WHEN 4 THEN 'YELP'
+        WHEN 5 THEN 'DOORDASH'
+        ELSE 'WEBSITE'
+    END AS review_source
+FROM RATED_ORDERS ro;
 
 -- ============================================================
 -- GENERATE DAILY SALES SUMMARY
@@ -325,30 +340,54 @@ INSERT INTO FACT_DAILY_SALES (
     dine_in_orders, pickup_orders, delivery_orders, total_pizzas_sold,
     new_customers, weather_condition, is_weekend, is_holiday
 )
+/* CTE Step: Pre-aggregate items to the Order level.
+   This prevents the "Fan-out" issue where joining items multiplies order revenue.
+*/
+WITH ITEM_METRICS AS (
+    SELECT 
+        o.order_id,
+        SUM(CASE WHEN oi.item_id BETWEEN 1 AND 14 THEN oi.quantity ELSE 0 END) AS pizza_count
+    FROM FACT_ORDER o
+    JOIN FACT_ORDER_ITEM oi ON o.order_id = oi.order_id
+    GROUP BY o.order_id
+)
 SELECT 
     DATE(o.order_timestamp) AS sales_date,
     o.location_id,
-    COUNT(DISTINCT o.order_id) AS total_orders,
+    COUNT(o.order_id) AS total_orders,
     SUM(o.total_amount) AS total_revenue,
     ROUND(AVG(o.total_amount), 2) AS avg_order_value,
-    COUNT(DISTINCT CASE WHEN o.order_type = 'DINE_IN' THEN o.order_id END) AS dine_in_orders,
-    COUNT(DISTINCT CASE WHEN o.order_type = 'PICKUP' THEN o.order_id END) AS pickup_orders,
-    COUNT(DISTINCT CASE WHEN o.order_type = 'DELIVERY' THEN o.order_id END) AS delivery_orders,
-    SUM(CASE WHEN oi.item_id BETWEEN 1 AND 14 THEN oi.quantity ELSE 0 END) AS total_pizzas_sold,
-    COUNT(DISTINCT CASE WHEN c.registration_date = DATE(o.order_timestamp) THEN c.customer_id END) AS new_customers,
-    CASE UNIFORM(1, 10, RANDOM())
-        WHEN 1 THEN 'Rainy'
-        WHEN 2 THEN 'Rainy'
-        WHEN 3 THEN 'Cloudy'
-        WHEN 4 THEN 'Cloudy'
-        ELSE 'Sunny'
-    END AS weather_condition,
-    DAYOFWEEK(o.order_timestamp) IN (0, 6) AS is_weekend,
-    DATE(o.order_timestamp) IN ('2024-01-01', '2024-07-04', '2024-11-28', '2024-12-25', '2025-01-01') AS is_holiday
+    
+    -- Order Type Counts
+    COUNT(CASE WHEN o.order_type = 'DINE_IN' THEN 1 END) AS dine_in_orders,
+    COUNT(CASE WHEN o.order_type = 'PICKUP' THEN 1 END) AS pickup_orders,
+    COUNT(CASE WHEN o.order_type = 'DELIVERY' THEN 1 END) AS delivery_orders,
+    
+    -- Sum the pre-calculated item metrics
+    COALESCE(SUM(im.pizza_count), 0) AS total_pizzas_sold,
+    
+    -- Customer Logic
+    COUNT(CASE WHEN c.registration_date = DATE(o.order_timestamp) THEN c.customer_id END) AS new_customers,
+    
+    -- Random Weather (Wrapped in ANY_VALUE or MAX to satisfy Group By)
+    ANY_VALUE(
+        CASE UNIFORM(1, 10, RANDOM())
+            WHEN 1 THEN 'Rainy'
+            WHEN 2 THEN 'Rainy'
+            WHEN 3 THEN 'Cloudy'
+            WHEN 4 THEN 'Cloudy'
+            ELSE 'Sunny'
+        END
+    ) AS weather_condition,
+    
+    -- Date Logic (Wrapped in MAX to satisfy Group By)
+    MAX(CASE WHEN DAYOFWEEK(o.order_timestamp) IN (0, 6) THEN TRUE ELSE FALSE END) AS is_weekend,
+    MAX(CASE WHEN DATE(o.order_timestamp) IN ('2024-01-01', '2024-07-04', '2024-11-28', '2024-12-25', '2025-01-01') THEN TRUE ELSE FALSE END) AS is_holiday
+
 FROM FACT_ORDER o
-LEFT JOIN FACT_ORDER_ITEM oi ON o.order_id = oi.order_id
+LEFT JOIN ITEM_METRICS im ON o.order_id = im.order_id
 LEFT JOIN DIM_CUSTOMER c ON o.customer_id = c.customer_id
-GROUP BY DATE(o.order_timestamp), o.location_id;
+GROUP BY 1, 2;
 
 -- ============================================================
 -- GENERATE INVENTORY DATA
