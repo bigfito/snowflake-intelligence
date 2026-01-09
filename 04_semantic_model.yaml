@@ -1,0 +1,655 @@
+name: pizzeria_bella_napoli
+description: >
+  Semantic model for Bella Napoli Pizzeria operations data including 
+  sales, orders, customers, menu items, reviews, and inventory.
+
+# Global instructions for the AI to ensure consistent SQL generation
+custom_instructions: >
+  When calculating revenue, always use the 'total_amount' column from FACT_ORDER.
+  For 'sales' questions, default to filtering out CANCELLED orders unless specified otherwise.
+
+tables:
+  # ========== DIMENSION TABLES ==========
+  - name: DIM_MENU_ITEM
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_MENU_ITEM
+    primary_key:
+      columns:
+        - item_id
+    description: >
+      All menu items including pizzas, appetizers, salads, pasta, desserts, and beverages.
+    columns:
+      - name: item_id
+        expr: item_id
+        kind: dimension
+        description: Unique identifier for each menu item
+        data_type: NUMBER
+      - name: item_name
+        expr: item_name
+        kind: dimension
+        description: Name of the menu item as displayed to customers
+        data_type: TEXT
+        sample_values:
+          - "Margherita"
+          - "Pepperoni"
+          - "Supreme"
+      - name: category_id
+        expr: category_id
+        kind: dimension
+        description: Foreign key to DIM_CATEGORY
+        data_type: NUMBER
+      - name: description
+        expr: description
+        kind: dimension
+        description: Full description of the menu item including ingredients
+        data_type: TEXT
+      - name: base_price
+        expr: base_price
+        kind: measure
+        description: Standard price for the item.
+        data_type: NUMBER
+      - name: cost_to_make
+        expr: cost_to_make
+        kind: measure
+        description: Cost of ingredients and labor.
+        data_type: NUMBER
+      - name: is_vegetarian
+        expr: is_vegetarian
+        kind: dimension
+        description: Whether the item is vegetarian-friendly
+        data_type: BOOLEAN
+        synonyms: ["vegetarian", "veg", "meat-free"]
+      - name: is_vegan
+        expr: is_vegan
+        kind: dimension
+        description: Whether the item is vegan-friendly
+        data_type: BOOLEAN
+      - name: is_gluten_free
+        expr: is_gluten_free
+        kind: dimension
+        description: Whether the item is gluten-free
+        data_type: BOOLEAN
+        synonyms: ["gf", "gluten free"]
+
+  - name: DIM_CATEGORY
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_CATEGORY
+    primary_key:
+      columns:
+        - category_id
+    description: Menu categories.
+    columns:
+      - name: category_id
+        expr: category_id
+        kind: dimension
+        description: Unique identifier for category
+        data_type: NUMBER
+      - name: category_name
+        expr: category_name
+        kind: dimension
+        description: Name of the category
+        data_type: TEXT
+        sample_values:
+          - "Pizzas"
+          - "Appetizers"
+          - "Salads"
+
+  - name: DIM_SIZE
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_SIZE
+    primary_key:
+      columns:
+        - size_id
+    description: Pizza sizes with pricing multipliers.
+    columns:
+      - name: size_id
+        expr: size_id
+        kind: dimension
+        description: Unique identifier for size
+        data_type: NUMBER
+      - name: size_name
+        expr: size_name
+        kind: dimension
+        description: Name of the size
+        data_type: TEXT
+        sample_values:
+          - "Small"
+          - "Medium"
+          - "Large"
+      - name: size_inches
+        expr: size_inches
+        kind: dimension
+        description: Diameter in inches
+        data_type: NUMBER
+      - name: price_multiplier
+        expr: price_multiplier
+        kind: measure
+        description: Multiplier applied to base price
+        data_type: NUMBER
+
+  - name: DIM_CUSTOMER
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_CUSTOMER
+    primary_key:
+      columns:
+        - customer_id
+    description: Customer information.
+    columns:
+      - name: customer_id
+        expr: customer_id
+        kind: dimension
+        description: Unique identifier for each customer
+        data_type: NUMBER
+      - name: first_name
+        expr: first_name
+        kind: dimension
+        description: Customer's first name
+        data_type: TEXT
+      - name: last_name
+        expr: last_name
+        kind: dimension
+        description: Customer's last name
+        data_type: TEXT
+      - name: email
+        expr: email
+        kind: dimension
+        description: Customer's email address
+        data_type: TEXT
+      - name: city
+        expr: city
+        kind: dimension
+        description: Customer's city
+        data_type: TEXT
+        sample_values:
+          - "Austin"
+          - "Round Rock"
+      - name: registration_date
+        expr: registration_date
+        kind: time_dimension
+        description: Date the customer first registered
+        data_type: DATE
+      - name: loyalty_points
+        expr: loyalty_points
+        kind: measure
+        description: Current loyalty program points balance
+        data_type: NUMBER
+      - name: preferred_order_type
+        expr: preferred_order_type
+        kind: dimension
+        description: Customer's most common order method
+        data_type: TEXT
+
+  - name: DIM_LOCATION
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_LOCATION
+    primary_key:
+      columns:
+        - location_id
+    description: Restaurant location information.
+    columns:
+      - name: location_id
+        expr: location_id
+        kind: dimension
+        description: Unique identifier for each location
+        data_type: NUMBER
+      - name: location_name
+        expr: location_name
+        kind: dimension
+        description: Name of the location
+        data_type: TEXT
+        sample_values:
+          - "Downtown"
+          - "Westlake"
+      - name: city
+        expr: city
+        kind: dimension
+        description: City where location is situated
+        data_type: TEXT
+      - name: seating_capacity
+        expr: seating_capacity
+        kind: measure
+        description: Number of seats available for dine-in
+        data_type: NUMBER
+
+  - name: DIM_EMPLOYEE
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: DIM_EMPLOYEE
+    primary_key:
+      columns:
+        - employee_id
+    description: Employee information.
+    columns:
+      - name: employee_id
+        expr: employee_id
+        kind: dimension
+        description: Unique identifier for each employee
+        data_type: NUMBER
+      - name: first_name
+        expr: first_name
+        kind: dimension
+        description: Employee's first name
+        data_type: TEXT
+      - name: role
+        expr: role
+        kind: dimension
+        description: Job role/position
+        data_type: TEXT
+        sample_values:
+          - "MANAGER"
+          - "CHEF"
+          - "DELIVERY_DRIVER"
+      - name: hourly_rate
+        expr: hourly_rate
+        kind: measure
+        description: Hourly pay rate
+        data_type: NUMBER
+
+  # ========== FACT TABLES ==========
+  - name: FACT_ORDER
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: FACT_ORDER
+    primary_key:
+      columns:
+        - order_id
+    description: Order header information with totals, timestamps, and status.
+    columns:
+      - name: order_id
+        expr: order_id
+        kind: dimension
+        description: Unique identifier for each order
+        data_type: NUMBER
+      - name: customer_id
+        expr: customer_id
+        kind: dimension
+        description: Foreign key to DIM_CUSTOMER
+        data_type: NUMBER
+      - name: employee_id
+        expr: employee_id
+        kind: dimension
+        description: Foreign key to DIM_EMPLOYEE
+        data_type: NUMBER
+      - name: location_id
+        expr: location_id
+        kind: dimension
+        description: Foreign key to DIM_LOCATION
+        data_type: NUMBER
+      - name: order_timestamp
+        expr: order_timestamp
+        kind: time_dimension
+        description: When the order was placed
+        data_type: TIMESTAMP
+      - name: order_type
+        expr: order_type
+        kind: dimension
+        description: How the order was fulfilled
+        data_type: TEXT
+        sample_values:
+          - "DELIVERY"
+          - "PICKUP"
+          - "DINE_IN"
+      - name: subtotal
+        expr: subtotal
+        kind: measure
+        description: Sum of all line items before tax and tip
+        data_type: NUMBER
+      - name: tax_amount
+        expr: tax_amount
+        kind: measure
+        description: Sales tax collected
+        data_type: NUMBER
+      - name: tip_amount
+        expr: tip_amount
+        kind: measure
+        description: Tip amount for delivery orders
+        data_type: NUMBER
+      - name: discount_amount
+        expr: discount_amount
+        kind: measure
+        description: Any discounts applied
+        data_type: NUMBER
+      - name: total_amount
+        expr: total_amount
+        kind: measure
+        description: Final order total (subtotal + tax + tip - discount).
+        data_type: NUMBER
+        synonyms: ["revenue", "sales", "income", "earnings"]
+      - name: payment_method
+        expr: payment_method
+        kind: dimension
+        description: How the customer paid
+        data_type: TEXT
+      - name: order_status
+        expr: order_status
+        kind: dimension
+        description: Current status of the order
+        data_type: TEXT
+        sample_values:
+          - "COMPLETED"
+          - "CANCELLED"
+
+  - name: FACT_ORDER_ITEM
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: FACT_ORDER_ITEM
+    primary_key:
+      columns:
+        - order_item_id
+    description: Individual line items within each order.
+    columns:
+      - name: order_item_id
+        expr: order_item_id
+        kind: dimension
+        description: Unique identifier for each line item
+        data_type: NUMBER
+      - name: order_id
+        expr: order_id
+        kind: dimension
+        description: Foreign key to FACT_ORDER
+        data_type: NUMBER
+      - name: item_id
+        expr: item_id
+        kind: dimension
+        description: Foreign key to DIM_MENU_ITEM
+        data_type: NUMBER
+      - name: size_id
+        expr: size_id
+        kind: dimension
+        description: Foreign key to DIM_SIZE
+        data_type: NUMBER
+      - name: quantity
+        expr: quantity
+        kind: measure
+        description: Number of this item ordered
+        data_type: NUMBER
+        synonyms: ["count", "number of items"]
+      - name: unit_price
+        expr: unit_price
+        kind: measure
+        description: Price per unit after size adjustment
+        data_type: NUMBER
+      - name: line_total
+        expr: line_total
+        kind: measure
+        description: Total for this line (quantity * unit_price)
+        data_type: NUMBER
+
+  - name: FACT_REVIEW
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: FACT_REVIEW
+    primary_key:
+      columns:
+        - review_id
+    description: Customer reviews and ratings.
+    columns:
+      - name: review_id
+        expr: review_id
+        kind: dimension
+        description: Unique identifier for each review
+        data_type: NUMBER
+      - name: order_id
+        expr: order_id
+        kind: dimension
+        description: Foreign key to the order being reviewed
+        data_type: NUMBER
+      - name: customer_id
+        expr: customer_id
+        kind: dimension
+        description: Foreign key to DIM_CUSTOMER
+        data_type: NUMBER
+      - name: location_id
+        expr: location_id
+        kind: dimension
+        description: Foreign key to DIM_LOCATION
+        data_type: NUMBER
+      - name: review_date
+        expr: review_date
+        kind: time_dimension
+        description: When the review was submitted
+        data_type: TIMESTAMP
+      - name: overall_rating
+        expr: overall_rating
+        kind: measure
+        description: Overall satisfaction rating (1-5 stars)
+        data_type: NUMBER
+        synonyms: ["rating", "score", "stars"]
+      - name: food_rating
+        expr: food_rating
+        kind: measure
+        description: Food quality rating
+        data_type: NUMBER
+      - name: service_rating
+        expr: service_rating
+        kind: measure
+        description: Service quality rating
+        data_type: NUMBER
+      - name: delivery_rating
+        expr: delivery_rating
+        kind: measure
+        description: Delivery experience rating
+        data_type: NUMBER
+      - name: review_text
+        expr: review_text
+        kind: dimension
+        description: Free-text customer feedback
+        data_type: TEXT
+      - name: review_source
+        expr: review_source
+        kind: dimension
+        description: Where the review was submitted
+        data_type: TEXT
+
+  - name: FACT_DAILY_SALES
+    base_table:
+      database: PIZZERIA_DEMO
+      schema: BELLA_NAPOLI
+      table: FACT_DAILY_SALES
+    # Note: Composite key (sales_date + location_id) is typical here, 
+    # but the semantic model often just needs a logical unique ID.
+    # If there is no single PK, you can often omit this or define a composite.
+    # We will omit it for this aggregate table unless it causes an error, 
+    # as strict PKs are usually for Dimension joins.
+    description: Pre-aggregated daily sales summary by location.
+    columns:
+      - name: sales_date
+        expr: sales_date
+        kind: time_dimension
+        description: The date of sales
+        data_type: DATE
+      - name: location_id
+        expr: location_id
+        kind: dimension
+        description: Foreign key to DIM_LOCATION
+        data_type: NUMBER
+      - name: total_orders
+        expr: total_orders
+        kind: measure
+        description: Number of orders for the day
+        data_type: NUMBER
+      - name: total_revenue
+        expr: total_revenue
+        kind: measure
+        description: Total revenue for the day
+        data_type: NUMBER
+      - name: avg_order_value
+        expr: avg_order_value
+        kind: measure
+        description: Average order value for the day
+        data_type: NUMBER
+        synonyms: ["AOV"]
+      - name: total_pizzas_sold
+        expr: total_pizzas_sold
+        kind: measure
+        description: Number of pizzas sold
+        data_type: NUMBER
+      - name: is_weekend
+        expr: is_weekend
+        kind: dimension
+        description: Whether the day is Saturday or Sunday
+        data_type: BOOLEAN
+      - name: is_holiday
+        expr: is_holiday
+        kind: dimension
+        description: Whether the day is a recognized holiday
+        data_type: BOOLEAN
+      - name: weather_condition
+        expr: weather_condition
+        kind: dimension
+        description: General weather for the day
+        data_type: TEXT
+
+relationships:
+  - name: order_to_customer
+    left_table: FACT_ORDER
+    right_table: DIM_CUSTOMER
+    relationship_columns:
+      - left_column: customer_id
+        right_column: customer_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: order_to_location
+    left_table: FACT_ORDER
+    right_table: DIM_LOCATION
+    relationship_columns:
+      - left_column: location_id
+        right_column: location_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: order_to_employee
+    left_table: FACT_ORDER
+    right_table: DIM_EMPLOYEE
+    relationship_columns:
+      - left_column: employee_id
+        right_column: employee_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: order_item_to_order
+    left_table: FACT_ORDER_ITEM
+    right_table: FACT_ORDER
+    relationship_columns:
+      - left_column: order_id
+        right_column: order_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: order_item_to_menu_item
+    left_table: FACT_ORDER_ITEM
+    right_table: DIM_MENU_ITEM
+    relationship_columns:
+      - left_column: item_id
+        right_column: item_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: order_item_to_size
+    left_table: FACT_ORDER_ITEM
+    right_table: DIM_SIZE
+    relationship_columns:
+      - left_column: size_id
+        right_column: size_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: menu_item_to_category
+    left_table: DIM_MENU_ITEM
+    right_table: DIM_CATEGORY
+    relationship_columns:
+      - left_column: category_id
+        right_column: category_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: review_to_order
+    left_table: FACT_REVIEW
+    right_table: FACT_ORDER
+    relationship_columns:
+      - left_column: order_id
+        right_column: order_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: review_to_customer
+    left_table: FACT_REVIEW
+    right_table: DIM_CUSTOMER
+    relationship_columns:
+      - left_column: customer_id
+        right_column: customer_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: review_to_location
+    left_table: FACT_REVIEW
+    right_table: DIM_LOCATION
+    relationship_columns:
+      - left_column: location_id
+        right_column: location_id
+    relationship_type: many_to_one
+    join_type: inner
+
+  - name: daily_sales_to_location
+    left_table: FACT_DAILY_SALES
+    right_table: DIM_LOCATION
+    relationship_columns:
+      - left_column: location_id
+        right_column: location_id
+    relationship_type: many_to_one
+    join_type: inner
+
+verified_queries:
+  - name: top_selling_pizzas
+    question: "What are our top 5 selling pizzas this month?"
+    verified_by: "Admin"
+    verified_at: 1715421234
+    sql: >
+      SELECT m.item_name, SUM(oi.quantity) as total_sold
+      FROM PIZZERIA_DEMO.BELLA_NAPOLI.FACT_ORDER_ITEM oi
+      JOIN PIZZERIA_DEMO.BELLA_NAPOLI.DIM_MENU_ITEM m ON oi.item_id = m.item_id
+      JOIN PIZZERIA_DEMO.BELLA_NAPOLI.FACT_ORDER o ON oi.order_id = o.order_id
+      JOIN PIZZERIA_DEMO.BELLA_NAPOLI.DIM_CATEGORY c ON m.category_id = c.category_id
+      WHERE c.category_name = 'Pizzas'
+      AND o.order_timestamp >= DATEADD('month', -1, CURRENT_DATE())
+      GROUP BY m.item_name
+      ORDER BY total_sold DESC
+      LIMIT 5;
+
+  - name: vegetarian_best_sellers
+    question: "What vegetarian options sell the best?"
+    verified_by: "Admin"
+    verified_at: 1715421234
+    sql: >
+      SELECT m.item_name, SUM(oi.quantity) as total_quantity
+      FROM PIZZERIA_DEMO.BELLA_NAPOLI.FACT_ORDER_ITEM oi
+      JOIN PIZZERIA_DEMO.BELLA_NAPOLI.DIM_MENU_ITEM m ON oi.item_id = m.item_id
+      WHERE m.is_vegetarian = TRUE
+      GROUP BY m.item_name
+      ORDER BY total_quantity DESC;
+      
+  - name: revenue_by_location
+    question: "Compare sales between Downtown and Westlake locations"
+    verified_by: "Admin"
+    verified_at: 1715421234
+    sql: >
+      SELECT l.location_name, SUM(o.total_amount) as total_revenue
+      FROM PIZZERIA_DEMO.BELLA_NAPOLI.FACT_ORDER o
+      JOIN PIZZERIA_DEMO.BELLA_NAPOLI.DIM_LOCATION l ON o.location_id = l.location_id
+      WHERE l.location_name IN ('Downtown', 'Westlake')
+      GROUP BY l.location_name;
